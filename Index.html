@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link href="https://fonts.googleapis.com/css2?family=Amiri:wght@700&family=Plus+Jakarta+Sans:wght@400;600;700&display=swap" rel="stylesheet">
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<style>
+:root{--g:#123c2f;--g2:#1d5a45;--gold:#b8872b;--bg:#f6f1e7;--ink:#1c1c1a;--ok:#1f8a4c;--warn:#c98a00;--bad:#b3261e}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:'Plus Jakarta Sans',system-ui,sans-serif}
+header{background:var(--g);color:#fff;padding:14px 18px;display:flex;justify-content:space-between;align-items:center;border-bottom:4px solid var(--gold)}
+h1{font:700 22px 'Amiri',serif;margin:0}
+.sub{font-size:12px;opacity:.8}
+main{max-width:520px;margin:0 auto;padding:16px}
+.card{background:#fff;border-radius:14px;padding:16px;box-shadow:0 1px 4px #0002;margin-bottom:14px}
+input{width:100%;padding:13px;font-size:17px;border:2px solid #d8d2c4;border-radius:10px;font-family:inherit}
+button{background:var(--g);color:#fff;border:0;border-radius:10px;padding:13px 18px;font-weight:600;font-size:15px;font-family:inherit;cursor:pointer}
+button.ghost{background:transparent;color:#fff;border:1px solid #fff6;padding:7px 12px;font-size:13px}
+.row{display:flex;gap:8px;margin-top:10px}
+#reader{width:100%;border-radius:10px;overflow:hidden;background:#000;min-height:120px}
+.stat{font-size:13px;text-align:right}.stat b{font-size:20px;display:block}
+#res{border-radius:14px;padding:18px;color:#fff;text-align:center;display:none}
+#res .n{font:700 24px 'Amiri',serif}#res .k{opacity:.9;font-size:14px;margin:2px 0 8px}#res .s{font-weight:700;letter-spacing:.5px}
+.ok{background:var(--ok)}.terlambat{background:var(--warn)}.duplikat{background:#4a6fa5}.error{background:var(--bad)}
+ul{list-style:none;margin:0;padding:0;font-size:14px}li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
+.t{font-size:12px;font-weight:700}.t.hadir{color:var(--ok)}.t.terlambat{color:var(--warn)}.t.duplikat{color:#4a6fa5}.t.error{color:var(--bad)}
+</style>
+</head>
+<body>
+<header>
+  <div><h1>Absensi Kajian Fasahah</h1><div class="sub" id="who">Petugas belum login</div></div>
+  <div class="stat" id="stat" style="display:none"><b id="cnt">0</b>hadir hari ini <button class="ghost" onclick="logout()">Keluar</button></div>
+</header>
+<main>
+  <div class="card" id="loginBox">
+    <p style="margin-top:0"><b>Login petugas</b></p>
+    <input id="pin" type="password" inputmode="numeric" placeholder="Masukkan PIN" onkeydown="if(event.key==='Enter')doLogin()">
+    <div class="row"><button onclick="doLogin()" style="width:100%">Masuk</button></div>
+    <p id="lerr" style="color:var(--bad);margin:8px 0 0"></p>
+  </div>
+
+  <div id="app" style="display:none">
+    <div class="card"><div id="reader"></div>
+      <div class="row"><button id="camBtn" onclick="toggleCam()" style="width:100%">Mulai kamera</button></div>
+      <div class="row"><button onclick="$('foto').click()" style="width:100%;background:var(--gold)">Foto QR (kamera bawaan HP)</button></div>
+      <input id="foto" type="file" accept="image/*" capture="environment" style="display:none" onchange="bacaFoto(this)">
+      <div id="tmpq" style="display:none"></div>
+      <p id="camNote" style="font-size:13px;color:var(--bad);margin:8px 0 0"></p>
+    </div>
+    <div class="card">
+      <input id="manual" placeholder="Scanner USB / ketik kode lalu Enter" autocomplete="off" onkeydown="if(event.key==='Enter'){proses(this.value);this.value=''}">
+    </div>
+    <div id="res"></div>
+    <div class="card"><b>Riwayat sesi ini</b><ul id="hist"></ul></div>
+  </div>
+</main>
+<script>
+let PIN=sessionStorage.getItem('pin')||'', cam=null, busy=false, lastKode='', lastT=0, total=0;
+const $=id=>document.getElementById(id);
+const API_URL='https://script.google.com/macros/s/AKfycbwMWlXwksZngPoTm6Ls3hPTFRssnsSXKiIjnBol88wDqwzdeNTQlqgz63aDB3HY1cnX/exec'; // contoh: https://script.google.com/macros/s/XXXX/exec
+const api=async(fn,...a)=>{
+  const r=await fetch(API_URL,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({fn:fn,args:a})});
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  return r.json();
+};
+
+async function doLogin(){
+  $('lerr').textContent='';
+  const p=$('pin').value.trim()||PIN;
+  try{
+    const r=await api('login',p);
+    if(!r.ok){$('lerr').textContent='PIN salah atau akun nonaktif.';return}
+    PIN=p;sessionStorage.setItem('pin',p);total=r.total;
+    $('loginBox').style.display='none';$('app').style.display='block';$('stat').style.display='block';
+    $('who').textContent='Petugas: '+r.nama;setCount(r.hariIni);
+    if(matchMedia('(pointer:fine)').matches)$('manual').focus();
+  }catch(e){$('lerr').textContent='Gagal terhubung: '+e.message}
+}
+function logout(){sessionStorage.removeItem('pin');stopCam();location.reload()}
+function setCount(n){$('cnt').textContent=n+' / '+total}
+
+async function toggleCam(){cam?stopCam():startCam()}
+async function startCam(){
+  cam=new Html5Qrcode('reader',{formatsToSupport:[Html5QrcodeSupportedFormats.QR_CODE]});
+  try{
+    await cam.start({facingMode:'environment'},{fps:10,qrbox:{width:240,height:240}},t=>proses(t),()=>{});
+    $('camBtn').textContent='Matikan kamera';
+  }catch(e){cam=null;$('camNote').textContent='Kamera langsung diblokir browser. Gunakan tombol "Foto QR" di bawahnya, scanner USB, atau ketik manual.'}
+}
+async function stopCam(){if(cam){try{await cam.stop()}catch(e){}cam=null;$('camBtn').textContent='Mulai kamera'}}
+
+async function bacaFoto(inp){
+  const f=inp.files[0];inp.value='';if(!f)return;
+  try{const q=new Html5Qrcode('tmpq');const t=await q.scanFile(f,false);try{q.clear()}catch(e){}lastKode='';proses(t)}
+  catch(e){tampil({status:'error',pesan:'QR tidak terbaca. Foto lebih dekat dan pastikan tidak buram.'})}
+}
+async function proses(kode){
+  kode=String(kode).trim();
+  if(!kode||busy||(kode===lastKode&&Date.now()-lastT<4000))return;
+  busy=true;lastKode=kode;lastT=Date.now();
+  let r;
+  try{r=await api('absen',PIN,kode)}catch(e){r={status:'error',pesan:'Koneksi gagal: '+e.message}}
+  tampil(r);busy=false;
+}
+function tampil(r){
+  const cls={hadir:'ok',terlambat:'terlambat',duplikat:'duplikat',error:'error'}[r.status]||'error';
+  const el=$('res');el.className=cls;el.style.display='block';
+  const label=r.status==='hadir'?'HADIR':r.status==='terlambat'?'TERLAMBAT':r.status==='duplikat'?'SUDAH ABSEN':'GAGAL';
+  el.innerHTML=r.nama?`<div class="n">${esc(r.nama)}</div><div class="k">${esc(r.kelompok||'')}</div><div class="s">${label} · ${esc(r.jam||'')}</div>`
+                     :`<div class="s">${label}</div><div class="k">${esc(r.pesan||'')}</div>`;
+  beep(r.status);if(navigator.vibrate)navigator.vibrate(r.status==='error'?[200,80,200]:80);
+  if(r.hariIni!=null)setCount(r.hariIni);
+  const li=document.createElement('li');
+  li.innerHTML=`<span>${esc(r.nama||r.pesan)}</span><span class="t ${r.status}">${label} ${esc(r.jam||'')}</span>`;
+  $('hist').prepend(li);
+  if($('hist').children.length>15)$('hist').lastChild.remove();
+}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
+function beep(st){
+  try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();
+    o.frequency.value=st==='hadir'?880:st==='terlambat'?660:st==='duplikat'?520:220;o.connect(g);g.connect(c.destination);
+    g.gain.setValueAtTime(.2,c.currentTime);o.start();o.stop(c.currentTime+(st==='error'?.45:.15))}catch(e){}
+}
+if(PIN)doLogin();
+</script>
+</body>
+</html>
