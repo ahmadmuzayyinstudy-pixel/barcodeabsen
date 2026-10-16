@@ -20,9 +20,9 @@ button.ghost{background:transparent;color:#fff;border:1px solid #fff6;padding:7p
 .stat{font-size:13px;text-align:right}.stat b{font-size:20px;display:block}
 #res{border-radius:14px;padding:18px;color:#fff;text-align:center;display:none}
 #res .n{font:700 24px 'Amiri',serif}#res .k{opacity:.9;font-size:14px;margin:2px 0 8px}#res .s{font-weight:700;letter-spacing:.5px}
-.ok{background:var(--ok)}.terlambat{background:var(--warn)}.duplikat{background:#4a6fa5}.error{background:var(--bad)}
+.ok{background:var(--ok)}.terlambat{background:var(--warn)}.duplikat{background:#4a6fa5}.error{background:var(--bad)}.luar{background:#6b3fa0}.ditolak{background:#7a1c16}#res .w{margin-top:8px;font-size:13px;background:#0003;border-radius:8px;padding:6px 10px}
 ul{list-style:none;margin:0;padding:0;font-size:14px}li{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid #eee}
-.t{font-size:12px;font-weight:700}.t.hadir{color:var(--ok)}.t.terlambat{color:var(--warn)}.t.duplikat{color:#4a6fa5}.t.error{color:var(--bad)}
+.t{font-size:12px;font-weight:700}.t.hadir{color:var(--ok)}.t.terlambat{color:var(--warn)}.t.duplikat{color:#4a6fa5}.t.error{color:var(--bad)}.t.luar{color:#6b3fa0}.t.ditolak{color:#7a1c16}
 </style>
 </head>
 <body>
@@ -39,6 +39,7 @@ ul{list-style:none;margin:0;padding:0;font-size:14px}li{display:flex;justify-con
   </div>
 
   <div id="app" style="display:none">
+    <div class="card" id="jendela" style="font-size:13px;line-height:1.7"></div>
     <div class="card"><div id="reader"></div>
       <div class="row"><button id="camBtn" onclick="toggleCam()" style="width:100%">Mulai kamera</button></div>
       <div class="row"><button onclick="$('foto').click()" style="width:100%;background:var(--gold)">Foto QR (kamera bawaan HP)</button></div>
@@ -72,6 +73,7 @@ async function doLogin(){
     PIN=p;sessionStorage.setItem('pin',p);total=r.total;
     $('loginBox').style.display='none';$('app').style.display='block';$('stat').style.display='block';
     $('who').textContent='Petugas: '+r.nama;setCount(r.hariIni);
+    if(r.jendela)$('jendela').innerHTML='Scan dibuka <b>'+r.jendela.buka+'</b> · tepat waktu s.d. <b>'+r.jendela.hadirSampai+'</b> · ditutup <b>'+r.jendela.tutup+'</b><br>Di luar jam: '+(r.jendela.izinkan?'<b style="color:#6b3fa0">tetap dicatat (warna ungu)</b>':'<b style="color:#b3261e">ditolak</b>');
     if(matchMedia('(pointer:fine)').matches)$('manual').focus();
   }catch(e){$('lerr').textContent='Gagal terhubung: '+e.message}
 }
@@ -102,12 +104,12 @@ async function proses(kode){
   tampil(r);busy=false;
 }
 function tampil(r){
-  const cls={hadir:'ok',terlambat:'terlambat',duplikat:'duplikat',error:'error'}[r.status]||'error';
+  const cls={hadir:'ok',terlambat:'terlambat',luar:'luar',duplikat:'duplikat',ditolak:'ditolak',error:'error'}[r.status]||'error';
   const el=$('res');el.className=cls;el.style.display='block';
-  const label=r.status==='hadir'?'HADIR':r.status==='terlambat'?'TERLAMBAT':r.status==='duplikat'?'SUDAH ABSEN':'GAGAL';
-  el.innerHTML=r.nama?`<div class="n">${esc(r.nama)}</div><div class="k">${esc(r.kelompok||'')}</div><div class="s">${label} · ${esc(r.jam||'')}</div>`
+  const label={hadir:'HADIR',terlambat:'TERLAMBAT',luar:'DI LUAR JAM',duplikat:'SUDAH ABSEN',ditolak:'DITOLAK'}[r.status]||'GAGAL';
+  el.innerHTML=r.nama?`<div class="n">${esc(r.nama)}</div><div class="k">${esc(r.kelompok||'')}</div><div class="s">${label}${r.jam?' · '+esc(r.jam):''}</div>${r.peringatan?`<div class="w">⚠ ${esc(r.peringatan)}</div>`:''}`
                      :`<div class="s">${label}</div><div class="k">${esc(r.pesan||'')}</div>`;
-  beep(r.status);if(navigator.vibrate)navigator.vibrate(r.status==='error'?[200,80,200]:80);
+  beep(r.status);if(navigator.vibrate)navigator.vibrate(r.status==='error'||r.status==='ditolak'?[200,80,200]:80);
   if(r.hariIni!=null)setCount(r.hariIni);
   const li=document.createElement('li');
   li.innerHTML=`<span>${esc(r.nama||r.pesan)}</span><span class="t ${r.status}">${label} ${esc(r.jam||'')}</span>`;
@@ -117,8 +119,8 @@ function tampil(r){
 function esc(s){return String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]))}
 function beep(st){
   try{const c=new (window.AudioContext||window.webkitAudioContext)(),o=c.createOscillator(),g=c.createGain();
-    o.frequency.value=st==='hadir'?880:st==='terlambat'?660:st==='duplikat'?520:220;o.connect(g);g.connect(c.destination);
-    g.gain.setValueAtTime(.2,c.currentTime);o.start();o.stop(c.currentTime+(st==='error'?.45:.15))}catch(e){}
+    o.frequency.value=({hadir:880,terlambat:660,luar:400,duplikat:520})[st]||220;o.connect(g);g.connect(c.destination);
+    g.gain.setValueAtTime(.2,c.currentTime);o.start();o.stop(c.currentTime+(st==='error'||st==='ditolak'?.45:.15))}catch(e){}
 }
 if(PIN)doLogin();
 </script>
