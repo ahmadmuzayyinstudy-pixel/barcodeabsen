@@ -73,7 +73,7 @@ async function doLogin(){
     PIN=p;sessionStorage.setItem('pin',p);total=r.total;
     $('loginBox').style.display='none';$('app').style.display='block';$('stat').style.display='block';
     $('who').textContent='Petugas: '+r.nama;setCount(r.hariIni);
-    if(r.jendela)$('jendela').innerHTML='Scan dibuka <b>'+r.jendela.buka+'</b> · tepat waktu s.d. <b>'+r.jendela.hadirSampai+'</b> · ditutup <b>'+r.jendela.tutup+'</b><br>Di luar jam: '+(r.jendela.izinkan?'<b style="color:#6b3fa0">tetap dicatat (warna ungu)</b>':'<b style="color:#b3261e">ditolak</b>');
+    if(r.jendela)$('jendela').innerHTML='Scan dibuka <b>'+r.jendela.buka+'</b> · tepat waktu s.d. <b>'+r.jendela.hadirSampai+'</b> · ditutup <b>'+r.jendela.tutup+'</b><br>Di luar jam: '+(r.jendela.izinkan?'<b style="color:#6b3fa0">tetap dicatat (warna ungu)</b>':'<b style="color:#b3261e">ditolak</b>')+'<br><small style="color:#999">Server: '+(r.versi||'versi lama — deploy ulang!')+'</small>';
     if(matchMedia('(pointer:fine)').matches)$('manual').focus();
   }catch(e){$('lerr').textContent='Gagal terhubung: '+e.message}
 }
